@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
@@ -74,6 +75,48 @@ namespace Transaction.Controllers
                 tranzaction.RollbackToSavepoint("address_student");
                 return Ok("error with exception !");
             }
+        }
+        [HttpPost("execute")]
+        public IActionResult ExecuteTransaction([FromBody] StudentViewModel studentView)
+        {
+            var execute = _db.Database.CreateExecutionStrategy();
+            return execute.Execute(() =>
+            {
+                using var tranzaction = _db.Database.BeginTransaction();
+                try
+                {
+                    tranzaction.CreateSavepoint("address_student");
+                    var student = new Student()
+                    {
+                        FullName = studentView.FullName,
+                        IsStudent = studentView.IsStudent,
+                        Birthday = studentView.Birthday
+                    };
+                    _db.Students.Add(student);
+                    _db.SaveChanges();
+                    var address = new Address()
+                    {
+                        PochtaIndex = studentView.PochtaIndex,
+                        StudentId = student.StudentId
+                    };
+                    _db.Addresses.Add(address);
+                    if (_db.SaveChanges() > 0)
+                    {
+                        tranzaction.Commit();
+                        return Ok("ok !");
+                    }
+                    else
+                    {
+                        tranzaction.RollbackToSavepoint("address_student");
+                        return Ok("error !");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    tranzaction.RollbackToSavepoint("address_student");
+                    return Ok("error with exception !");
+                }
+            });
         }
     }
 }
